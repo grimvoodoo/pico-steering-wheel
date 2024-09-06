@@ -167,11 +167,13 @@ fn main() -> ! {
         .strings(&[StringDescriptors::default()
             .manufacturer("Foxy Fabrications")
             .product("Steering Wheel Additional Buttons")
-            .serial_number("TEST")])
+            .serial_number("PICO")])
         .unwrap()
         .build();
 
     info!("Starting");
+
+    led_pin.set_high().unwrap();
 
     loop {
         if !usb_dev.poll(&mut [&mut keyboard]) {
