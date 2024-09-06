@@ -2,8 +2,6 @@
 #![no_std]
 #![no_main]
 
-use core::default;
-
 use bsp::entry;
 use bsp::hal;
 use defmt::*;
@@ -17,64 +15,8 @@ use rp_pico::pac;
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 use usbd_human_interface_device::device::keyboard::BootKeyboard;
+use usbd_human_interface_device::page::Keyboard;
 use usbd_human_interface_device::prelude::UsbHidClassBuilder;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Format)]
-pub enum Keyboard {
-    A = 0x04,
-    B = 0x05,
-    C = 0x06,
-    D = 0x07,
-    NoEventIndicated = 0x00,
-    ErrorRollOver = 0x01,
-    POSTFail = 0x02,
-    ErrorUndefined = 0x03,
-    // Add your custom keycodes here
-    JoystickButton1 = 0x7400,
-    JoystickButton2 = 0x7401,
-    JoystickButton3 = 0x7402,
-    JoystickButton4 = 0x7403,
-    JoystickButton5 = 0x7404,
-    JoystickButton6 = 0x7405,
-    JoystickButton7 = 0x7406,
-    JoystickButton8 = 0x7407,
-    JoystickButton9 = 0x7408,
-    JoystickButton10 = 0x7409,
-    JoystickButton11 = 0x7410,
-    // You can keep adding custom hex codes like this
-}
-
-impl Default for Keyboard {
-    fn default() -> Self {
-        Keyboard::NoEventIndicated
-    }
-}
-
-#[derive(Default)]
-pub struct BootKeyboardReport {
-    pub keys: [Keyboard; 6], // 6-key rollover support
-}
-
-impl BootKeyboardReport {
-    pub fn new<K: IntoIterator<Item = Keyboard>>(keys: K) -> Self {
-        let mut report = Self::default();
-
-        let mut i = 0;
-        for k in keys {
-            if i < report.keys.len() {
-                report.keys[i] = k;
-                i += 1;
-            }
-        }
-
-        report
-    }
-
-    pub fn write_report(&self) {
-        // Mock function for sending the HID report
-        println!("Sending HID report: {:?}", self.keys);
-    }
-}
 
 const BUTTON_COUNT: usize = 4;
 
@@ -134,19 +76,19 @@ fn main() -> ! {
     let button_4 = pins.gpio5.into_pull_up_input();
 
     let mut button_1 = KeyBinding {
-        key: Keyboard::JoystickButton1,
+        key: Keyboard::F13,
         pin: button_1,
     };
     let mut button_2 = KeyBinding {
-        key: Keyboard::JoystickButton2,
+        key: Keyboard::F14,
         pin: button_2,
     };
     let mut button_3 = KeyBinding {
-        key: Keyboard::JoystickButton3,
+        key: Keyboard::F15,
         pin: button_3,
     };
     let mut button_4 = KeyBinding {
-        key: Keyboard::JoystickButton4,
+        key: Keyboard::F16,
         pin: button_4,
     };
 
@@ -208,11 +150,20 @@ fn main() -> ! {
             led_2.set_low().unwrap();
             led_3.set_low().unwrap();
             led_4.set_low().unwrap();
-            let report = BootKeyboardReport::new([Keyboard::NoEventIndicated; 6]);
-            report.write_report();
+            keyboard
+                .device::<BootKeyboard<'_, _>, _>()
+                .write_report([Keyboard::NoEventIndicated; 6])
+                .ok();
+            // Send the clear down command so the keys are not left hanging
         } else {
-            let report = BootKeyboardReport::new(pressed_buttons);
-            report.write_report();
+            for button in pressed_buttons {
+                keyboard
+                    .device::<BootKeyboard<'_, _>, _>()
+                    .write_report([button; 6])
+                    .ok();
+                continue;
+                // Send the keystroke
+            }
         }
     }
 }
