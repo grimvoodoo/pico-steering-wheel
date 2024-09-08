@@ -7,7 +7,6 @@ use bsp::hal;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::*;
-use heapless::spsc::Consumer;
 use heapless::Vec;
 use panic_probe as _;
 use rp_pico as bsp;
@@ -16,13 +15,8 @@ use rp_pico::pac;
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 use usbd_human_interface_device::device::keyboard::BootKeyboard;
-use usbd_human_interface_device::interface::InBytes8;
-use usbd_human_interface_device::interface::InterfaceBuilder;
-use usbd_human_interface_device::interface::OutBytes8;
-use usbd_human_interface_device::interface::ReportSingle;
 use usbd_human_interface_device::page::Keyboard;
 use usbd_human_interface_device::page::Simulation;
-use usbd_human_interface_device::page::Simulation::AutomobileSimulationDevice;
 use usbd_human_interface_device::prelude::UsbHidClassBuilder;
 
 const BUTTON_COUNT: usize = 4;
@@ -68,7 +62,7 @@ struct KeyBinding<P>
 where
     P: InputPin,
 {
-    key: Keyboard,
+    key: Simulation,
     pin: P,
 }
 
@@ -120,19 +114,19 @@ fn main() -> ! {
     let button_4 = pins.gpio5.into_pull_up_input();
 
     let mut button_1 = KeyBinding {
-        key: Keyboard::Macro01,
+        key: Simulation::Ballast,
         pin: button_1,
     };
     let mut button_2 = KeyBinding {
-        key: Keyboard::Macro02,
+        key: Simulation::Bicycle,
         pin: button_2,
     };
     let mut button_3 = KeyBinding {
-        key: Keyboard::Macro03,
+        key: Simulation::BicycleCrank,
         pin: button_3,
     };
     let mut button_4 = KeyBinding {
-        key: Keyboard::Macro04,
+        key: Simulation::Brake,
         pin: button_4,
     };
 
@@ -145,42 +139,24 @@ fn main() -> ! {
         &mut pac.RESETS,
     ));
 
-    // let mut keyboard = UsbHidClassBuilder::new()
-    //     .add_device(
-    //         InterfaceBuilder::<InBytes8, OutBytes8, ReportSingle>::new(
-    //             LOGITECH_GAMING_KEYBOARD_REPORT_DESCRIPTOR,
-    //         )
-    //         .unwrap()
-    //         .description("Custom Keyboard")
-    //         .idle_default(500.millis())
-    //         .unwrap()
-    //         .in_endpoint(10.millis())
-    //         .unwrap()
-    //         .with_out_endpoint(100.millis())
-    //         .unwrap()
-    //         .build(),
-    //     )
-    //     .build(&usb_bus);
-
-    let mut consumer = UsbHidClassBuilder::new()
+    let mut keyboard = UsbHidClassBuilder::new()
         .add_device(
-            usbd_human_interface_device::device::consumer::ConsumerControlFixedConfig::default(),
+            InterfaceBuilder::<InBytes8, OutBytes8, ReportSingle>::new(
+                LOGITECH_GAMING_KEYBOARD_REPORT_DESCRIPTOR,
+            )
+            .unwrap()
+            .description("Custom Keyboard")
+            .idle_default(500.millis())
+            .unwrap()
+            .in_endpoint(10.millis())
+            .unwrap()
+            .with_out_endpoint(100.millis())
+            .unwrap()
+            .build(),
         )
         .build(&usb_bus);
 
-    let mut fido = UsbHidClassBuilder::new()
-        .add_device(usbd_human_interface_device::device::fido::RawFidoConfig::default())
-        .build(&usb_bus);
-
-    let mut joystick = UsbHidClassBuilder::new()
-        .add_device(usbd_human_interface_device::device::joystick::JoystickConfig::default())
-        .build(&usb_bus);
-
-    let mut mouse = UsbHidClassBuilder::new()
-        .add_device(usbd_human_interface_device::device::mouse::BootMouseConfig::default())
-        .build(&usb_bus);
-
-    let mut keyboard = UsbHidClassBuilder::new()
+    let mut simulator = UsbHidClassBuilder::new()
         .add_device(usbd_human_interface_device::device::keyboard::BootKeyboardConfig::default())
         .build(&usb_bus);
 
@@ -200,7 +176,7 @@ fn main() -> ! {
         }
         // Set the default that no keys are pressed at the beggining of the loop
         let mut no_keys_pressed = true;
-        let mut pressed_buttons: Vec<Keyboard, BUTTON_COUNT> = Vec::new();
+        let mut pressed_buttons: Vec<Simulation, BUTTON_COUNT> = Vec::new();
 
         // If any key is pressed then the no_keys_pressed state is set to false to allow the keys to be sent
         if button_1.is_pressed() {
@@ -231,12 +207,12 @@ fn main() -> ! {
             led_4.set_low().unwrap();
             keyboard
                 .device::<BootKeyboard<'_, _>, _>()
-                .write_report([Keyboard::NoEventIndicated; 6])
+                .write_report([Simulation::NoEventIndicated; 6])
                 .ok();
             // Send the clear down command so the keys are not left hanging
         } else {
             for button in pressed_buttons {
-                keyboard
+                simulator
                     .device::<BootKeyboard<'_, _>, _>()
                     .write_report([button; 6])
                     .ok();
